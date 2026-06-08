@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KDFW Operational Weather Terminal</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' fill='%2338bdf8'/%3E%3Ctext x='50' y='58' font-size='48' text-anchor='middle' fill='%230b0f19' font-family='Arial, sans-serif'%3EW%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -261,11 +262,27 @@
 
         async function fetchObservations() {
             const station = 'KDFW';
-            const url = `https://api.weather.gov/stations/${station}/observations?limit=48`;
+            const cacheBuster = Date.now();
+            const url = `https://api.weather.gov/stations/${station}/observations?limit=48&cacheBuster=${cacheBuster}`;
             const response = await fetch(url, { cache: 'no-store' });
             if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
             const data = await response.json();
-            return data.features || [];
+            const features = data.features || [];
+            return features.sort((a, b) => {
+                const aTime = Date.parse(a.properties?.timestamp || '');
+                const bTime = Date.parse(b.properties?.timestamp || '');
+                return bTime - aTime;
+            });
+        }
+
+        async function fetchLatestObservation() {
+            const station = 'KDFW';
+            const cacheBuster = Date.now();
+            const url = `https://api.weather.gov/stations/${station}/observations/latest?cacheBuster=${cacheBuster}`;
+            const response = await fetch(url, { cache: 'reload' });
+            if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+            const data = await response.json();
+            return data.properties;
         }
 
         async function cycleTelemetry() {
@@ -273,7 +290,13 @@
                 const features = await fetchObservations();
                 if (!features.length) throw new Error('No observations returned');
 
-                const latest = features[0].properties;
+                let latest = null;
+                try {
+                    latest = await fetchLatestObservation();
+                } catch (innerErr) {
+                    console.warn('Latest observation fetch failed, falling back to history list.', innerErr);
+                }
+                latest = latest || features[0].properties;
                 const rawMetar = latest.rawMessage || 'NO RAW MESSAGE';
                 const category = parseFlightCategory(rawMetar);
 
