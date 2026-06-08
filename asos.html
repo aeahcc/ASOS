@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>KDFW Operational Weather Terminal</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+
+        :root {
+
+            --bg-color: #0b0f19;
+
+            --card-bg: #131c2e;
+
+            --text-main: #f8fafc;
+
+            --text-muted: #64748b;
+
+            --accent: #38bdf8;
+
+            --border: #1e293b;
+
+            --vfr: #10b981;
+
+            --mvfr: #3b82f6;
+
+            --ifr: #ef4444;
+
+            --lifr: #d946ef;
+
+        }
+
+        body {
+
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+            background-color: var(--bg-color);
+
+            color: var(--text-main);
+
+            margin: 0;
+
+            padding: 24px;
+
+            line-height: 1.5;
+
+        }
+
+        .container {
+
+            max-width: 1400px;
+
+            margin: 0 auto;
+
+        }
+
+        header {
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            margin-bottom: 24px;
+
+            padding-bottom: 16px;
+
+            border-bottom: 1px solid var(--border);
+
+        }
+
+        .title-area h1 {
+
+            margin: 0;
+
+            color: var(--accent);
+
+            font-size: 26px;
+
+            text-transform: uppercase;
+
+            letter-spacing: 1.5px;
+
+            font-weight: 800;
+
+        }
+
+        .title-area p { margin: 4px 0 0 0; color: var(--text-muted); font-size: 14px; }
+
+        .sync-badge {
+
+            background: #1e293b;
+
+            padding: 8px 16px;
+
+            border-radius: 20px;
+
+            font-family: monospace;
+
+            font-size: 13px;
+
+            border: 1px solid var(--border);
+
+            display: flex;
+
+            align-items: center;
+
+            gap: 8px;
+
+        }
+
+        .pulse {
+
+            width: 8px; height: 8px; background: var(--accent); border-radius: 50%;
+
+            animation: blink 1s infinite alternate;
+
+        }
+
+        @keyframes blink { from { opacity: 0.3; } to { opacity: 1; } }
+
+        /* Chart Container */
+
+        .chart-wrapper {
+
+            background-color: var(--card-bg);
+
+            border: 1px solid var(--border);
+
+            border-radius: 12px;
+
+            padding: 20px;
+
+            margin-bottom: 24px;
+
+            height: 350px;
+
+        }
+
+        /* Metrics Panel */
+
+        .grid-panel {
+
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+
+            gap: 16px; margin-bottom: 24px;
+
+        }
+
+        .card {
+
+            background-color: var(--card-bg); border: 1px solid var(--border);
+
+            border-radius: 12px; padding: 20px; position: relative; overflow: hidden;
+
+        }
+
+        .card::before {
+
+            content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+
+            background: var(--border);
+
+        }
+
+        .card.active-vfr::before { background: var(--vfr); }
+
+        .card.active-mvfr::before { background: var(--mvfr); }
+
+        .card.active-ifr::before { background: var(--ifr); }
+
+        .card.active-lifr::before { background: var(--lifr); }
+
+        .label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 700; }
+
+        .value { font-size: 32px; font-weight: 800; margin-top: 8px; }
+
+        .sub-value { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+        .metar-banner {
+
+            background: #05070f; border: 1px solid var(--border); border-radius: 8px;
+
+            padding: 16px; font-family: monospace; font-size: 15px; color: #34d399;
+
+            margin-bottom: 24px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+
+            word-wrap: break-word;
+
+        }
+
+        /* History Table */
+
+        .table-wrapper {
+
+            background-color: var(--card-bg); border: 1px solid var(--border);
+
+            border-radius: 12px; overflow: hidden; height: 500px; overflow-y: auto;
+
+        }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+
+        
+
+        th {
+
+            background-color: #090f19; color: var(--text-muted); font-weight: 700;
+
+            font-size: 12px; text-transform: uppercase; padding: 16px;
+
+            position: sticky; top: 0; border-bottom: 2px solid var(--border);
+
+            z-index: 10;
+
+        }
+
+        td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+
+        tr:hover { background-color: rgba(255, 255, 255, 0.02); }
+
+        .flight-badge {
+
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+
+            font-size: 11px; font-weight: 800; text-align: center;
+
+        }
+
+        .b-vfr { background: rgba(16, 185, 129, 0.15); color: var(--vfr); border: 1px solid var(--vfr); }
+
+        .b-mvfr { background: rgba(59, 130, 246, 0.15); color: var(--mvfr); border: 1px solid var(--mvfr); }
+
+        .b-ifr { background: rgba(239, 68, 68, 0.15); color: var(--ifr); border: 1px solid var(--ifr); }
+
+        .b-lifr { background: rgba(217, 70, 239, 0.15); color: var(--lifr); border: 1px solid var(--lifr); }
+
+        .raw-text { font-family: monospace; color: #cbd5e1; font-size: 13px; }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="container">
+
+        <header>
+
+            <div class="title-area">
+
+                <h1>KDFW Tactical Weather Terminal</h1>
+
+                <p>Dallas/Fort Worth International Airport Monitoring - Live Feed</p>
+
+            </div>
+
+            <div class="sync-badge">
+
+                <div class="pulse"></div>
+
+                <span>Next Refresh: <span id="countdown">60s</span></span>
+
+            </div>
+
+        </header>
+
+        <div class="metar-banner" id="top-metar">ESTABLISHING SECURE CONNECTION...</div>
+
+        <div class="chart-wrapper" id="chart-container">
+
+            <canvas id="weatherChart"></canvas>
+
+        </div>
+
+        <div class="grid-panel">
+
+            <div class="card" id="card-rules">
+
+                <div class="label">Flight Category</div>
+
+                <div class="value" id="val-rules">--</div>
+
+                <div class="sub-value">Current Rules Protocol</div>
+
+            </div>
+
+            <div class="card">
+
+                <div class="label">Altimeter / Pressure</div>
+
+                <div class="value" id="val-press">--</div>
+
+                <div class="sub-value" id="val-press-hpa">--</div>
+
+            </div>
+
+            <div class="card">
+
+                <div class="label">Wind Profile</div>
+
+                <div class="value" id="val-wind">--</div>
+
+                <div class="sub-value" id="val-wind-ms">--</div>
+
+            </div>
+
+            <div class="card">
+
+                <div class="label">Temp / Dewpoint</div>
+
+                <div class="value" id="val-temp">--</div>
+
+                <div class="sub-value" id="val-dew">--</div>
+
+            </div>
+
+        </div>
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>Time (Local)</th>
+
+                        <th>Category</th>
+
+                        <th>Temp / Dew</th>
+
+                        <th>Wind (KT)</th>
+
+                        <th>Altimeter</th>
+
+                        <th>Raw Telemetry</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="terminal-stream"></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+    <script>
+
+        let countdownTime = 60;
+
+        let weatherChartInstance = null;
+
+        
+
+        function cToF(c) { return c !== null && c !== undefined ? parseFloat((c * 9/5 + 32).toFixed(1)) : null; }
+
+        
+
+        // Relative Humidity approximation
+
+        function calculateRH(tC, dC) {
+
+            if (tC === null || dC === null || tC === undefined || dC === undefined) return null;
+
+            const magnus = (val) => Math.exp((17.625 * val) / (243.04 + val));
+
+            return Math.round(100 * (magnus(dC) / magnus(tC)));
+
+        }
+
+        
+
+        // Custom, Safe Visibility Fraction Parser (No eval)
+
+        function safeParseVisibility(visStr) {
+
+            try {
+
+                const parts = visStr.trim().split(' ');
+
+                let total = 0;
+
+                for (let i = 0; i < parts.length; i++) {
+
+                    const part = parts[i];
+
+                    if (part.includes('/')) {
+
+                        const fraction = part.split('/');
+
+                        total += (parseInt(fraction[0], 10) / parseInt(fraction[1], 10));
+
+                    } else {
+
+                        total += parseInt(part, 10);
+
+                    }
+
+                }
+
+                return total || 10;
+
+            } catch (e) {
+
+                return 10;
+
+            }
+
+        }
+
+        // Flight Category Logic
+
+        function parseFlightCategory(metar) {
+
+            if (!metar) return { cat: 'VFR', class: 'b-vfr', rootClass: 'active-vfr' };
+
+            let visibility = 10; 
+
+            let ceiling = 999; 
+
+            
+
+            const visMatch = metar.match(/\b([1-9](\s\d/\d)?|\d/\d)SM\b/);
+
+            if (visMatch) {
+
+                visibility = safeParseVisibility(visMatch[1]);
+
+            }
+
+            
+
+            const r = /\b(BKN|OVC)(\d{3})\b/g;
+
+            let match;
+
+            while ((match = r.exec(metar)) !== null) {
+
+                const layerHeight = parseInt(match[2], 10) * 100;
+
+                if (layerHeight < ceiling) ceiling = layerHeight;
+
+            }
+
+            
+
+            if (ceiling < 500 || visibility < 1) return { cat: 'LIFR', class: 'b-lifr', rootClass: 'active-lifr' };
+
+            if (ceiling < 1000 || visibility < 3) return { cat: 'IFR', class: 'b-ifr', rootClass: 'active-ifr' };
+
+            if (ceiling <= 3000 || visibility <= 5) return { cat: 'MVFR', class: 'b-mvfr', rootClass: 'active-mvfr' };
+
+            return { cat: 'VFR', class: 'b-vfr', rootClass: 'active-vfr' };
+
+        }
+
+        function initOrUpdateChart(labels, tempData, dewData, humData) {
+
+            // Guard: If the viewer app blocked the external CDN script, hide chart but don't crash
+
+            if (typeof Chart === 'undefined') {
+
+                document.getElementById('chart-container').style.display = 'none';
+
+                return;
+
+            }
+
+            const ctx = document.getElementById('weatherChart').getContext('2d');
+
+            
+
+            if (weatherChartInstance) {
+
+                weatherChartInstance.data.labels = labels;
+
+                weatherChartInstance.data.datasets[0].data = tempData;
+
+                weatherChartInstance.data.datasets[1].data = dewData;
+
+                weatherChartInstance.data.datasets[2].data = humData;
+
+                weatherChartInstance.update();
+
+                return;
+
+            }
+
+            Chart.defaults.color = '#64748b';
+
+            Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+            weatherChartInstance = new Chart(ctx, {
+
+                type: 'line',
+
+                data: {
+
+                    labels: labels,
+
+                    datasets: [
+
+                        { label: 'Temperature (°F)', data: tempData, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', borderWidth: 2, yAxisID: 'y', tension: 0.3, fill: true, pointRadius: 2 },
+
+                        { label: 'Dew Point (°F)', data: dewData, borderColor: '#10b981', borderWidth: 2, yAxisID: 'y', tension: 0.3, pointRadius: 2 },
+
+                        { label: 'Relative Humidity (%)', data: humData, borderColor: '#8b5cf6', borderWidth: 2, borderDash: [5, 5], yAxisID: 'y1', tension: 0.3, pointRadius: 2 }
+
+                    ]
+
+                },
+
+                options: {
+
+                    responsive: true, maintainAspectRatio: false,
+
+                    interaction: { mode: 'index', intersect: false },
+
+                    plugins: { legend: { position: 'top' }, tooltip: { backgroundColor: '#1e293b', titleColor: '#f8fafc', bodyColor: '#cbd5e1' } },
+
+                    scales: {
+
+                        x: { grid: { color: '#1e293b' }, reverse: false },
+
+                        y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Degrees (°F)' }, grid: { color: '#1e293b' } },
+
+                        y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Humidity (%)' }, grid: { drawOnChartArea: false }, min: 0, max: 100 }
+
+                    }
+
+                }
+
+            });
+
+        }
+
+        async function cycleTelemetry() {
+
+            try {
+
+                // Cache-busting URL ensures WebViews do not serve stale data
+
+                const url = `https://aviationweather.gov/api/data/metar?ids=KDFW&format=json&hours=48&cb=${Date.now()}`;
+
+                const response = await fetch(url);
+
+                
+
+                if (!response.ok) throw new Error('Network Stream Interrupt');
+
+                
+
+                const features = await response.json();
+
+                if (!features || features.length === 0) throw new Error('Empty Data Payload');
+
+                // Parse Current
+
+                const current = features[0];
+
+                const rawMetar = current.rawOb || 'NO METAR TRANSMITTED';
+
+                const flightRules = parseFlightCategory(rawMetar);
+
+                document.getElementById('top-metar').textContent = rawMetar;
+
+                document.getElementById('top-metar').style.color = '#34d399';
+
+                
+
+                const rulesCard = document.getElementById('card-rules');
+
+                rulesCard.className = `card ${flightRules.rootClass}`;
+
+                document.getElementById('val-rules').textContent = flightRules.cat;
+
+                document.getElementById('val-rules').style.color = `var(--${flightRules.cat.toLowerCase()})`;
+
+                const altInHg = current.altim ? (current.altim * 0.02953).toFixed(2) : '--';
+
+                document.getElementById('val-press').textContent = altInHg !== '--' ? `${altInHg} inHg` : '--';
+
+                document.getElementById('val-press-hpa').textContent = current.altim ? `${Math.round(current.altim)} hPa` : '--';
+
+                const windKt = current.wspd !== null && current.wspd !== undefined ? current.wspd : 0;
+
+                const windDir = current.wdir ? `${String(current.wdir).padStart(3, '0')}°` : 'VRB';
+
+                document.getElementById('val-wind').textContent = windKt === 0 ? 'CALM' : `${windDir} @ ${windKt} KT`;
+
+                document.getElementById('val-wind-ms').textContent = current.wgst ? `Gusting: ${current.wgst} KT` : 'Gusts: None';
+
+                document.getElementById('val-temp').textContent = current.temp !== null ? `${cToF(current.temp)}°F` : '--';
+
+                document.getElementById('val-dew').textContent = current.dewp !== null ? `Dewpoint: ${cToF(current.dewp)}°F` : '--';
+
+                // Parse Stream
+
+                const streamBody = document.getElementById('terminal-stream');
+
+                streamBody.innerHTML = '';
+
+                
+
+                const chartLabels = [];
+
+                const chartTemp = [];
+
+                const chartDew = [];
+
+                const chartHum = [];
+
+                const chartFeatures = features.slice(0, 48);
+
+                chartFeatures.forEach(obs => {
+
+                    const dateObj = new Date(obs.obsTime * 1000);
+
+                    const timeLabel = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+                    const fullStamp = dateObj.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+
+                    chartLabels.push(timeLabel);
+
+                    chartTemp.push(cToF(obs.temp));
+
+                    chartDew.push(cToF(obs.dewp));
+
+                    chartHum.push(calculateRH(obs.temp, obs.dewp));
+
+                    const localMetar = obs.rawOb || '';
+
+                    const localRules = parseFlightCategory(localMetar);
+
+                    const localTemp = obs.temp !== null ? cToF(obs.temp).toFixed(1) : '--';
+
+                    const localDew = obs.dewp !== null ? cToF(obs.dewp).toFixed(1) : '--';
+
+                    
+
+                    const lWindKt = obs.wspd !== null && obs.wspd !== undefined ? obs.wspd : 0;
+
+                    let localWindStr = '00000KT';
+
+                    if (lWindKt > 0) {
+
+                        const dirStr = (obs.wdir === null || obs.wdir === undefined || obs.wdir === 'VRB') ? 'VRB' : String(obs.wdir).padStart(3, '0');
+
+                        localWindStr = `${dirStr}@${String(lWindKt).padStart(2, '0')}KT`;
+
+                        if (obs.wgst) localWindStr += `G${obs.wgst}KT`;
+
+                    }
+
+                    const lAlt = obs.altim ? (obs.altim * 0.02953).toFixed(2) : '--';
+
+                    const row = document.createElement('tr');
+
+                    row.innerHTML = `
+
+                        <td><strong>${fullStamp}</strong></td>
+
+                        <td><span class="flight-badge ${localRules.class}">${localRules.cat}</span></td>
+
+                        <td>${localTemp}°F / ${localDew}°F</td>
+
+                        <td>${localWindStr}</td>
+
+                        <td>${lAlt}</td>
+
+                        <td class="raw-text">${localMetar}</td>
+
+                    `;
+
+                    streamBody.appendChild(row);
+
+                });
+
+                initOrUpdateChart(chartLabels.reverse(), chartTemp.reverse(), chartDew.reverse(), chartHum.reverse());
+
+            } catch (err) {
+
+                console.error('Terminal Crash:', err);
+
+                const metarBanner = document.getElementById('top-metar');
+
+                metarBanner.textContent = `CONNECTION ERROR: ${err.message}. Retrying in 60s...`;
+
+                metarBanner.style.color = '#ef4444';
+
+            }
+
+        }
+
+ 
+
+       function runClockwork() {
+
+            countdownTime--;
+
+            if (countdownTime <= 0) {
+
+                countdownTime = 60;
+
+                cycleTelemetry();
+
+            }
+
+            document.getElementById('countdown').textContent = `${countdownTime}s`;
+
+        }
+
+        // Boot Sequence
+
+        cycleTelemetry();
+
+        setInterval(runClockwork, 1000);
+
+    </script>
+
+</body>
+
+</html>
+
+
+
