@@ -262,8 +262,7 @@
 
         async function fetchObservations() {
             const station = 'KDFW';
-            const cacheBuster = Date.now();
-            const url = `https://api.weather.gov/stations/${station}/observations?limit=48&cacheBuster=${cacheBuster}`;
+            const url = `https://api.weather.gov/stations/${station}/observations?limit=48`;
             const response = await fetch(url, { cache: 'no-store' });
             if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
             const data = await response.json();
@@ -277,8 +276,7 @@
 
         async function fetchLatestObservation() {
             const station = 'KDFW';
-            const cacheBuster = Date.now();
-            const url = `https://api.weather.gov/stations/${station}/observations/latest?cacheBuster=${cacheBuster}`;
+            const url = `https://api.weather.gov/stations/${station}/observations/latest`;
             const response = await fetch(url, { cache: 'reload' });
             if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
             const data = await response.json();
